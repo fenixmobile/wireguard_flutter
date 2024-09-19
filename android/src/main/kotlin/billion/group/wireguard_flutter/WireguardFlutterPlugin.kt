@@ -59,8 +59,7 @@ class WireguardFlutterPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         }
     }
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
-        this.havePermission =
-            (requestCode == PERMISSIONS_REQUEST_CODE) && (resultCode == Activity.RESULT_OK)
+        this.havePermission = resultCode == Activity.RESULT_OK
         return havePermission
     }
 
@@ -163,12 +162,6 @@ class WireguardFlutterPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 checkPermission()
                 result.success(null)
             }
-            "getDownloadData" -> {
-                getDownloadData(result)
-            }
-            "getUploadData" -> {
-                getUploadData(result)
-            }
             else -> flutterNotImplemented(result)
         }
     }
@@ -241,7 +234,7 @@ class WireguardFlutterPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         scope.launch(Dispatchers.IO) {
             try {
                 if (!havePermission) {
-                    checkPermission()
+                    // checkPermission()
                     throw Exception("Permissions are not given")
                 }
                 updateStage("prepare")
@@ -290,29 +283,6 @@ class WireguardFlutterPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         }
     }
 
-    private fun getDownloadData(result: Result) {
-        scope.launch(Dispatchers.IO) {
-            try {
-                val downloadData = futureBackend.await().getTransferData(tunnel(tunnelName)).rxBytes
-                flutterSuccess(result, downloadData)
-            } catch (e: Throwable) {
-                Log.e(TAG, "getDownloadData - ERROR - ${e.message}")
-                flutterError(result, e.message.toString())
-            }
-        }
-    }
-
-    private fun getUploadData(result: Result) {
-        scope.launch(Dispatchers.IO) {
-            try {
-                val uploadData = futureBackend.await().getTransferData(tunnel(tunnelName)).txBytes
-                flutterSuccess(result, uploadData)
-            } catch (e: Throwable) {
-                Log.e(TAG, "getUploadData - ERROR - ${e.message}")
-                flutterError(result, e.message.toString())
-            }
-        }
-    }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel.setMethodCallHandler(null)
