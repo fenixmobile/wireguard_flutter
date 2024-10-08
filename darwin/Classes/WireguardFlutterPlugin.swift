@@ -68,8 +68,13 @@ public class WireguardFlutterPlugin: NSObject, FlutterPlugin {
     }
     
     private func connect(serverAddress: String, wgQuickConfig: String, providerBundleIdentifier: String, result: @escaping FlutterResult) {
-        WireguardFlutterPlugin.utils.configureVPN(serverAddress: serverAddress, wgQuickConfig: wgQuickConfig, providerBundleIdentifier: providerBundleIdentifier) { success in
-            result(success)
+        WireguardFlutterPlugin.utils.configureVPN(serverAddress: serverAddress, wgQuickConfig: wgQuickConfig, providerBundleIdentifier: providerBundleIdentifier) { outcome in
+            switch outcome {
+            case .success:
+                result(true)  // Başarılı olursa true döner.
+            case .failure(let error):
+                result(FlutterError(code: "VPN_ERROR", message: error.localizedDescription, details: nil))  // Hata olursa Flutter'a hata döner.
+            }
         }
     }
     
@@ -200,47 +205,47 @@ class VPNUtils {
         }
     }
     
-    func configureVPN(serverAddress: String?, wgQuickConfig: String?, providerBundleIdentifier: String?, completion: @escaping (Bool) -> Void) {
+    func configureVPN(serverAddress: String?, wgQuickConfig: String?, providerBundleIdentifier: String?, completion: @escaping (Result<Void, Error>) -> Void) {
         NETunnelProviderManager.loadAllFromPreferences { tunnelManagersInSettings, error in
             if let error = error {
                 NSLog("Error (loadAllFromPreferences): \(error)")
-                completion(false)
+                completion(.failure(error))
                 return
             }
             let preExistingTunnelManager = tunnelManagersInSettings?.first
             let tunnelManager = preExistingTunnelManager ?? NETunnelProviderManager()
-            
+
             let protocolConfiguration = NETunnelProviderProtocol()
-            
+
             protocolConfiguration.providerBundleIdentifier = providerBundleIdentifier!
             protocolConfiguration.serverAddress = serverAddress
             protocolConfiguration.providerConfiguration = ["wgQuickConfig": wgQuickConfig!]
-            
+
             tunnelManager.protocolConfiguration = protocolConfiguration
             tunnelManager.isEnabled = true
-            
+
             tunnelManager.saveToPreferences { error in
                 if let error = error {
                     NSLog("Error (saveToPreferences): \(error)")
-                    completion(false)
+                    completion(.failure(error))  // Hata olduğunda completion'a error döndür.
                 } else {
                     tunnelManager.loadFromPreferences { error in
                         if let error = error {
                             NSLog("Error (loadFromPreferences): \(error)")
-                            completion(false)
+                            completion(.failure(error))  // Başka bir hata durumunda da error döndür.
                         } else {
                             NSLog("Starting the tunnel")
                             if let session = tunnelManager.connection as? NETunnelProviderSession {
                                 do {
                                     try session.startTunnel(options: nil)
-                                    completion(true)
+                                    completion(.success(()))  // Başarılı olduğunda success döndür.
                                 } catch {
                                     NSLog("Error (startTunnel): \(error)")
-                                    completion(false)
+                                    completion(.failure(error))
                                 }
                             } else {
                                 NSLog("tunnelManager.connection is invalid")
-                                completion(false)
+                                completion(.failure(NSError(domain: "VPNError", code: -1, userInfo: [NSLocalizedDescriptionKey: "tunnelManager.connection is invalid"])))
                             }
                         }
                     }
@@ -248,6 +253,7 @@ class VPNUtils {
             }
         }
     }
+
     
     func stopVPN(completion: @escaping (Bool?) -> Void) {
         NETunnelProviderManager.loadAllFromPreferences { tunnelManagersInSettings, error in
